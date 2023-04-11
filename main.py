@@ -1,11 +1,13 @@
 import pygame
-import heapq
 import random
-import math
+
+from astar import find_path_astar
+from dijkstra import find_path_dijkstra
 
 # Define the constants
-GRID_WIDTH = 200
-GRID_HEIGHT = 200
+
+GRID_WIDTH = 400
+GRID_HEIGHT = 400
 CELL_WIDTH = 5
 CELL_HEIGHT = 5
 
@@ -121,79 +123,6 @@ def print_grid(grid):
     for row in grid:
         print(" ".join(str(cell) for cell in row))
 
-
-def neighbors(cell, grid):
-    row, col = cell
-    width, height = len(grid[0]), len(grid)
-
-    candidates = [(row - 1, col), (row, col + 1), (row + 1, col), (row, col - 1)]
-    result = []
-
-    for r, c in candidates:
-        if 0 <= r < height and 0 <= c < width and grid[r][c] != 1:
-            result.append((r, c))
-
-    return result
-
-
-# Define the A* algorithm
-def reconstruct_path(came_from, start, end):
-    path = [end]
-    current = end
-    while current != start:
-        current = came_from[current]
-        path.append(current)
-    path.reverse()
-    return path
-
-
-def heuristic(cell, goal):
-    x_distance = abs(cell[0] - goal[0])
-    y_distance = abs(cell[1] - goal[1])
-    return x_distance + y_distance
-
-
-def heuristic2(cell, goal):
-    x_distance = abs(cell[0] - goal[0])
-    y_distance = abs(cell[1] - goal[1])
-    return x_distance + y_distance + min(x_distance, y_distance)
-
-
-def cost(current, neighbor):
-    if current[0] == neighbor[0] or current[1] == neighbor[1]:
-        return 1  # Horizontal or vertical move
-    else:
-        return 1.41421356  # Diagonal move, approx. sqrt(2)
-
-
-def find_path_astar(start, end, grid):
-    open_set = [start]
-    came_from = {}
-    g_score = {start: 0}
-    f_score = {start: heuristic(start, end)}
-
-    while open_set:
-        current = min(open_set, key=lambda cell: f_score[cell])
-        open_set.remove(current)
-
-        if current == end:
-            path = reconstruct_path(came_from, start, end)
-            return path
-
-        for neighbor in neighbors(current, grid):
-            tentative_g_score = g_score[current] + cost(current, neighbor)
-
-            if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
-                came_from[neighbor] = current
-                g_score[neighbor] = tentative_g_score
-                f_score[neighbor] = tentative_g_score + heuristic(neighbor, end)
-
-                if neighbor not in open_set:
-                    open_set.append(neighbor)
-
-    return None
-
-
 def remove_corners(path, grid):
     if len(path) < 3:
         return path
@@ -257,124 +186,6 @@ def minimize_corners_90(path):
     return new_path
 
 
-from queue import PriorityQueue
-
-
-def find_path_dijkstra(grid, start, goal):
-    # Convert the grid into a graph
-    graph = {}
-    for x in range(len(grid)):
-        for y in range(len(grid[0])):
-            if grid[x][y] == 0:
-                neighbors = []
-                if x > 0 and grid[x - 1][y] == 0:
-                    neighbors.append((x - 1, y))
-                if x < len(grid) - 1 and grid[x + 1][y] == 0:
-                    neighbors.append((x + 1, y))
-                if y > 0 and grid[x][y - 1] == 0:
-                    neighbors.append((x, y - 1))
-                if y < len(grid[0]) - 1 and grid[x][y + 1] == 0:
-                    neighbors.append((x, y + 1))
-                graph[(x, y)] = neighbors
-
-    # Use Dijkstra's algorithm to find the shortest path with only horizontal or vertical segments
-    dist = {start: 0}
-    prev = {start: None}
-    queue = PriorityQueue()
-    queue.put((0, start))
-
-    while not queue.empty():
-        _, current = queue.get()
-        if current == goal:
-            break
-        for neighbor in graph[current]:
-            alt = (
-                dist[current]
-                + abs(current[0] - neighbor[0])
-                + abs(current[1] - neighbor[1])
-            )
-            if neighbor not in dist or alt < dist[neighbor]:
-                if neighbor in dist:
-                    queue.put((alt, neighbor))
-                else:
-                    queue.put((alt, neighbor))
-                    dist[neighbor] = alt
-                    prev[neighbor] = current
-
-    # Build the optimized path by tracing back from the goal to the start
-    path = []
-    current = goal
-    while current is not None:
-        path.append(current)
-        current = prev[current]
-    path.reverse()
-
-    # Remove unnecessary corners
-    i = 0
-    while i < len(path) - 2:
-        if (path[i][0] == path[i + 1][0] and path[i + 1][0] == path[i + 2][0]) or (
-            path[i][1] == path[i + 1][1] and path[i + 1][1] == path[i + 2][1]
-        ):
-            # Remove the middle point
-            path.pop(i + 1)
-        else:
-            i += 1
-
-    return path
-
-
-def jump_search(start, end, grid):
-    n = len(grid)
-    m = len(grid[0])
-    block_size = int(math.sqrt(n * m))
-
-    x, y = start
-    while True:
-        if grid[x][y] != 0:
-            return None
-
-        if (x, y) == end:
-            return [(x, y)]
-
-        bx, by = x // block_size, y // block_size
-        nbx, nby = (bx + 1) * block_size, (by + 1) * block_size
-
-        if (
-            end[0] >= bx * block_size
-            and end[0] < nbx
-            and end[1] >= by * block_size
-            and end[1] < nby
-        ):
-            path = [(x, y)]
-            dx, dy = end[0] - x, end[1] - y
-            sx, sy = dx // abs(dx) if dx != 0 else 0, dy // abs(dy) if dy != 0 else 0
-            while (x, y) != end:
-                x += sx
-                y += sy
-                if grid[x][y] != 0:
-                    return None
-                path.append((x, y))
-            return path
-
-        if end[0] < bx * block_size:
-            nx, ny = bx * block_size, by * block_size + block_size // 2
-        elif end[0] >= nbx:
-            nx, ny = nbx - 1, by * block_size + block_size // 2
-        elif end[1] < by * block_size:
-            nx, ny = bx * block_size + block_size // 2, by * block_size
-        else:
-            nx, ny = bx * block_size + block_size // 2, nby - 1
-
-        dx, dy = end[0] - nx, end[1] - ny
-        sx, sy = dx // abs(dx) if dx != 0 else 0, dy // abs(dy) if dy != 0 else 0
-        if dx == dy == 0:
-            return [(x, y), end]
-        elif dx != 0 and dy != 0 and grid[nx + sx][ny] == 0 and grid[nx][ny + sy] == 0:
-            x, y = nx + sx, ny + sy
-        else:
-            x, y = nx, ny
-
-
 def print_path(path):
     if path:
         for row in path:
@@ -382,68 +193,45 @@ def print_path(path):
     else:
         print("Empty path")
 
-
-# Initialize pygame
-pygame.init()
-
-# Set the window size and title
-size = (GRID_WIDTH * CELL_WIDTH, GRID_HEIGHT * CELL_HEIGHT)
-screen = pygame.display.set_mode(size)
-pygame.display.set_caption("Pathfinding Tests")
-
-# Generate the grid
-grid = [[0 for col in range(GRID_WIDTH)] for row in range(GRID_HEIGHT)]
-
-# Generate parent rectangles
-parent_rects = generate_rectangles(
-    0,
-    0,
-    GRID_WIDTH,
-    GRID_HEIGHT,
-    max_rectangles=GRID_WIDTH * GRID_HEIGHT // 2,
-    alignment_grid=8,
-    min_width_multiple=4,
-    max_width_multiple=8,
-    min_height_multiple=4,
-    max_height_multiple=8,
-)
-
-# Generate the child rectangles
-all_rectangles = []
-
-for rect in parent_rects:
-    x, y, w, h = rect
-
-    rects = generate_rectangles(
-        x,
-        y,
-        w,
-        h,
-        max_rectangles=GRID_WIDTH * GRID_HEIGHT // 2,
-        alignment_grid=2,
-        min_width_multiple=2,
-        max_width_multiple=4,
-        min_height_multiple=2,
-        max_height_multiple=4,
+def inititalise_map(grid):
+    # Generate parent rectangles
+    parent_rects = generate_rectangles(
+        0,
+        0,
+        GRID_WIDTH,
+        GRID_HEIGHT,
+        max_rectangles=100,
+        alignment_grid=8,
+        min_width_multiple=4,
+        max_width_multiple=8,
+        min_height_multiple=4,
+        max_height_multiple=8,
     )
 
-    # Keep track of all rects for rendering
-    for rect in rects:
-        all_rectangles.append(rect)
+    # Generate the child rectangles
+    all_rectangles = []
 
-    rasterize_rectangles(rects, grid)
+    for rect in parent_rects:
+        x, y, w, h = rect
 
-# Generate the initial path
-start = random_empty_point(grid)
-end = random_empty_point(grid)
+        rects = generate_rectangles(
+            x,
+            y,
+            w,
+            h,
+            max_rectangles=100,
+            alignment_grid=2,
+            min_width_multiple=2,
+            max_width_multiple=4,
+            min_height_multiple=2,
+            max_height_multiple=4,
+        )
 
-path_a = find_path_astar(start, end, grid)
-path_b = find_path_dijkstra(grid, start, end)
+        # Keep track of all rects for rendering
+        for rect in rects:
+            all_rectangles.append(rect)
 
-# Define the main program loop
-done = False
-clock = pygame.time.Clock()
-
+    return parent_rects, all_rectangles
 
 def draw_path(cell_width, cell_height, path, screen, color, pan_x, pan_y, zoom):
     if path:
@@ -480,20 +268,58 @@ def draw_rect(cell_width, cell_height, color, screen, rect, pan_x, pan_y, zoom):
 
 
 def draw_circle(cell_width, cell_height, color, screen, start, pan_x, pan_y, zoom):
-    pygame.draw.circle(
-        screen,
-        color,
-        [
-            pan_x + (start[1] * cell_width + cell_width // 2) * zoom,
-            pan_y + (start[0] * cell_height + cell_height // 2) * zoom,
-        ],
-        max(1, cell_width * zoom),
-    )
+    x = pan_x + (start[1] * cell_width + cell_width // 2) * zoom
+    y = pan_y + (start[0] * cell_height + cell_height // 2) * zoom
+    r = max(1, cell_width * zoom)
 
+    if x >= 0 and y >= 0:
+        pygame.draw.circle(
+            screen,
+            color,
+            [
+                x,
+                y,
+            ],
+            r,
+        )
+
+
+# Initialize pygame
+pygame.init()
+
+# get the size of the screen
+screen_info = pygame.display.Info()
+screen_width, screen_height = screen_info.current_w, screen_info.current_h
+
+# create a fullscreen display with double buffering and vsync
+screen_flags = pygame.FULLSCREEN | pygame.SCALED
+screen = pygame.display.set_mode((screen_width, screen_height), screen_flags, vsync=1)
+
+# Set the window title
+pygame.display.set_caption("Pathfinding Tests")
+
+clock = pygame.time.Clock()
 
 # Set up the initial zoom and pan values
 zoom = 1.0
 offset = [0, 0]
+
+# Generate the grid
+grid = [[0 for col in range(GRID_WIDTH)] for row in range(GRID_HEIGHT)]
+
+parent_rects, all_rects = inititalise_map(grid)
+rasterize_rectangles(all_rects, grid)
+
+# Generate the initial path
+start = random_empty_point(grid)
+end = random_empty_point(grid)
+
+path_a = find_path_astar(start, end, grid)
+path_b = find_path_dijkstra(grid, start, end)
+
+# Define the main program loop
+done = False
+clock = pygame.time.Clock()
 
 while not done:
     # Handle events
@@ -529,7 +355,7 @@ while not done:
                 offset[1] += event.rel[1]
 
     # Clear the screen
-    screen.fill(WHITE)
+    screen.fill(BLACK)
 
     # Draw the parent rectangles
     for rect in parent_rects:
@@ -538,9 +364,9 @@ while not done:
         )
 
     # Draw the rectangles
-    for rect in all_rectangles:
+    for rect in all_rects:
         draw_rect(
-            CELL_WIDTH, CELL_HEIGHT, BLACK, screen, rect, offset[0], offset[1], zoom
+            CELL_WIDTH, CELL_HEIGHT, WHITE, screen, rect, offset[0], offset[1], zoom
         )
 
     # Draw the path
@@ -559,11 +385,7 @@ while not done:
     )
     draw_circle(CELL_WIDTH, CELL_HEIGHT, RED, screen, end, offset[0], offset[1], zoom)
 
-    # Update the screen
-    pygame.display.flip()
-
-    # Delay to achieve desired frame rate
-    clock.tick(60)
+    pygame.display.update()
 
 # Quit pygame
 pygame.quit()
